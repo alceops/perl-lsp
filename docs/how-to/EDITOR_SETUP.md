@@ -31,6 +31,7 @@ perllsp --health
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
+| Firebase Studio | use VS Code-compatible LSP settings with `perllsp --stdio` | [docs/EDITORS/FIREBASE_STUDIO_SETUP.md](../EDITORS/FIREBASE_STUDIO_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -102,6 +103,13 @@ Perl source files.
 
 Register a Perl language-server client that launches `perllsp --stdio`, then
 restart the client after changing workspace settings or include paths.
+
+### Firebase Studio
+
+Use the same setup model as VS Code, but prefer workspace-local paths and a
+command-based server path (`"perl-lsp.serverPath": "perllsp"`) so the
+configuration survives ephemeral cloud workspaces. See the dedicated guide for
+copy-paste settings and troubleshooting.
 
 ## When Setup Fails
 
