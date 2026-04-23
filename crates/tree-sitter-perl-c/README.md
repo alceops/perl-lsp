@@ -78,8 +78,10 @@ for snippet in &["my $x = 1;", "print $x;"] {
 | `try_create_parser()` | Creates a `tree_sitter::Parser` (returns `Result`) |
 | `create_parser()` | Creates a parser, silently ignoring language-set errors |
 | `parse_perl_bytes(code)` | Parses raw bytes (including non-UTF-8 Perl source) |
+| `parse_perl_bytes_stripping_utf8_bom(code)` | Parses raw bytes after removing a leading UTF-8 BOM, if present |
 | `parse_perl_code(code)` | Parses a `&str` into a `tree_sitter::Tree` |
 | `parse_perl_file(path)` | Reads and parses a file (non-UTF-8 safe) |
+| `parse_perl_file_stripping_utf8_bom(path)` | Reads, BOM-strips, and parses a file |
 | `get_scanner_config()` | Returns `"c-scanner"` |
 
 ## Binaries

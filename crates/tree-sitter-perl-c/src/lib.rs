@@ -134,6 +134,23 @@ pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::e
     }
 }
 
+/// Parses Perl source bytes after stripping a leading UTF-8 BOM if present.
+///
+/// This is a convenience wrapper for callers that want BOM-tolerant parsing
+/// without pre-processing input manually.
+///
+/// # Errors
+///
+/// Returns an error if the parser cannot be initialised (version mismatch) or
+/// if tree-sitter returns `None` from `parse` (cancelled or timed out).
+pub fn parse_perl_bytes_stripping_utf8_bom(
+    code: &[u8],
+) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
+    const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
+    let code = code.strip_prefix(UTF8_BOM).unwrap_or(code);
+    parse_perl_bytes(code)
+}
+
 /// Parses a Perl source string and returns the resulting [`tree_sitter::Tree`].
 ///
 /// # Errors
@@ -164,6 +181,20 @@ pub fn parse_perl_file<P: AsRef<Path>>(
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let code = std::fs::read(path)?;
     parse_perl_bytes(&code)
+}
+
+/// Reads a file from `path`, strips a leading UTF-8 BOM if present, and parses
+/// it as Perl source.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or if parsing fails (see
+/// [`parse_perl_bytes_stripping_utf8_bom`]).
+pub fn parse_perl_file_stripping_utf8_bom<P: AsRef<Path>>(
+    path: P,
+) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
+    let code = std::fs::read(path)?;
+    parse_perl_bytes_stripping_utf8_bom(&code)
 }
 
 /// Returns the scanner backend identifier for this crate.
@@ -273,6 +304,16 @@ mod tests {
         let tree = parse_perl_bytes(bom_source)?;
         // The tree must be returned even if the BOM causes an error node
         assert_eq!(tree.root_node().kind(), "source_file");
+        Ok(())
+    }
+
+    /// Verify that BOM-stripping helper removes UTF-8 BOM and yields a clean tree.
+    #[test]
+    fn test_parse_bytes_stripping_utf8_bom_removes_error_node()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let bom_source = b"\xEF\xBB\xBFmy $x = 1;";
+        let tree = parse_perl_bytes_stripping_utf8_bom(bom_source)?;
+        assert!(!tree.root_node().has_error());
         Ok(())
     }
 
