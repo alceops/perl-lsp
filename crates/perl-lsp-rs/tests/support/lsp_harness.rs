@@ -387,6 +387,23 @@ impl LspHarness {
         self.send_request_with_timeout(request, timeout)
     }
 
+    /// Request document links for a document URI.
+    ///
+    /// This keeps UX tests focused on scenario intent instead of method-name plumbing.
+    pub fn document_links(&mut self, uri: &str) -> Result<Value, String> {
+        self.request(
+            "textDocument/documentLink",
+            json!({
+                "textDocument": { "uri": uri }
+            }),
+        )
+    }
+
+    /// Resolve a deferred document link using `documentLink/resolve`.
+    pub fn resolve_document_link(&mut self, link: Value) -> Result<Value, String> {
+        self.request("documentLink/resolve", link)
+    }
+
     /// Send a didSave notification
     pub fn did_save(&mut self, uri: &str) -> Result<(), String> {
         self.notify(

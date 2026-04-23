@@ -1,47 +1,120 @@
-//! Tests for document links feature
+//! UX-focused behavioral coverage for document links.
+//!
+//! Exercises the real JSON-RPC workflow used by editors:
+//! 1) open document
+//! 2) request deferred links
+//! 3) resolve a chosen link
+
+mod support;
+
+use serde_json::{Value, json};
+use support::lsp_harness::LspHarness;
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+struct Scenario {
+    name: &'static str,
+}
+
+impl Scenario {
+    fn new(name: &'static str) -> Self {
+        eprintln!("Scenario: {name}");
+        Self { name }
+    }
+
+    fn given(&self, step: &str) {
+        eprintln!("[{}] Given {step}", self.name);
+    }
+
+    fn when(&self, step: &str) {
+        eprintln!("[{}] When {step}", self.name);
+    }
+
+    fn then(&self, step: &str) {
+        eprintln!("[{}] Then {step}", self.name);
+    }
+}
+
+fn first_link_of_type<'a>(links: &'a [Value], kind: &str) -> Option<&'a Value> {
+    links.iter().find(|link| link.pointer("/data/type").and_then(Value::as_str) == Some(kind))
+}
 
 #[test]
-fn test_document_links_basic() -> Result<(), Box<dyn std::error::Error>> {
-    use url::Url;
+fn bdd_document_links_emit_deferred_data_and_resolve_module_targets() -> TestResult {
+    let scenario = Scenario::new("Document link module flow uses deferred resolve");
+    scenario.given("a Perl document contains both pragma and module imports");
 
-    let uri: Url = "file:///workspace/test.pl".parse()?;
-    let _text = r#"
-use Data::Dumper;
-require JSON::XS;
-use Foo::Bar::Baz;
-"#;
+    let mut harness = LspHarness::new();
+    let _ = harness.initialize(None)?;
 
-    // This would call the internal function, but we can't access it directly from tests
-    // since it's not exported. We'll need to test through the LSP server interface
-    // or export the function in lib.rs
+    let uri = "file:///workspace/lib/main.pl";
+    harness.open(uri, "use strict;\nuse Foo::Bar;\nrequire Data::Dumper;\n")?;
 
-    // For now, just ensure the test compiles
-    assert!(uri.scheme() == "file");
+    scenario.when("the client requests textDocument/documentLink");
+    let links_value = harness.document_links(uri)?;
+    let links = links_value.as_array().ok_or("documentLink should return an array")?;
+
+    scenario.then("module imports produce deferred links while pragmas are excluded");
+    assert!(links.len() >= 2, "expected links for Foo::Bar and Data::Dumper, got {links_value:?}");
+
+    let strict_link = links
+        .iter()
+        .find(|link| link.pointer("/data/module").and_then(Value::as_str) == Some("strict"));
+    assert!(strict_link.is_none(), "pragma 'strict' must not produce a document link");
+
+    let module_link =
+        first_link_of_type(links, "module").ok_or("expected at least one module link")?;
+    assert!(
+        module_link.get("target").is_none(),
+        "deferred module links should not set target before resolve: {module_link:?}"
+    );
+
+    scenario.when("the client resolves the deferred module link");
+    let resolved = harness.resolve_document_link(module_link.clone())?;
+
+    scenario.then("documentLink/resolve sets a concrete target URI");
+    let target = resolved
+        .get("target")
+        .and_then(Value::as_str)
+        .ok_or("resolved link should include target")?;
+    assert!(
+        target.starts_with("file://") || target.starts_with("https://metacpan.org/pod/"),
+        "resolved module link should point to local file or MetaCPAN, got {target}"
+    );
+
     Ok(())
 }
 
 #[test]
-fn test_url_handling() -> Result<(), Box<dyn std::error::Error>> {
-    use url::Url;
+fn bdd_document_link_resolve_normalizes_mixed_separators_for_file_paths() -> TestResult {
+    let scenario = Scenario::new("File link resolve normalizes mixed path separators");
+    scenario.given("a deferred file link carries mixed slash and backslash separators");
 
-    // Test Windows-style paths
-    let uri = Url::parse("file:///C:/Users/test/project.pl")?;
-    assert_eq!(uri.scheme(), "file");
+    let mut harness = LspHarness::new();
+    let _ = harness.initialize(None)?;
 
-    // Test Unix-style paths
-    let uri2 = Url::parse("file:///home/user/project.pl")?;
-    assert_eq!(uri2.scheme(), "file");
-
-    // Test relative path resolution
-    let base = Url::parse("file:///workspace/src/main.pl")?;
-    #[allow(clippy::collapsible_if)]
-    if let Ok(path) = base.to_file_path() {
-        if let Some(parent) = path.parent() {
-            let resolved = parent.join("lib/module.pm");
-            if let Ok(new_url) = Url::from_file_path(resolved) {
-                assert!(new_url.to_string().contains("lib/module.pm"));
-            }
+    let unresolved = json!({
+        "range": {
+            "start": {"line": 0, "character": 8},
+            "end": {"line": 0, "character": 28}
+        },
+        "tooltip": "Open lib/Foo/Bar.pm",
+        "data": {
+            "type": "file",
+            "path": "lib\\Foo//Bar.pm",
+            "baseUri": "file:///workspace/script/main.pl"
         }
-    }
+    });
+
+    scenario.when("the client requests documentLink/resolve for the deferred file link");
+    let resolved = harness.resolve_document_link(unresolved)?;
+
+    scenario.then("the resolved target is a normalized file URI");
+    let target = resolved
+        .get("target")
+        .and_then(Value::as_str)
+        .ok_or("resolved file link should include a target")?;
+    assert!(target.starts_with("file:///workspace/script/lib/Foo/Bar.pm"));
+
     Ok(())
 }
