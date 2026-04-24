@@ -493,6 +493,28 @@ fn test_local_as_assignment_rhs() {
 }
 
 #[test]
+fn test_recover_missing_semicolon_after_scoped_sub_forward_decl() {
+    let code = "my sub helper my $x = 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover from missing ';' after scoped sub decl");
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+
+    assert!(sexp.contains("(sub "), "Recovered AST should preserve subroutine declaration: {sexp}");
+    assert!(
+        sexp.contains("my_declaration"),
+        "Recovered AST should preserve following variable declaration: {sexp}"
+    );
+    assert!(
+        parser.errors().iter().any(|e| format!("{e:?}").contains("Expected '{' or ';'")),
+        "Missing-semicolon recovery should produce a targeted syntax error: {:?}",
+        parser.errors()
+    );
+}
+
+#[test]
 fn test_recovery_unclosed_qw() {
     let code = "my @items = qw(one two three print 1;";
     let mut parser = Parser::new(code);

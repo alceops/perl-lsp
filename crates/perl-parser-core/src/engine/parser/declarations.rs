@@ -268,9 +268,30 @@ impl<'a> Parser<'a> {
         }
 
         // Check for forward declaration: sub foo; or sub foo(@); or sub foo :method;
-        // Forward declarations have no block body — they end with a semicolon
+        // Forward declarations have no block body — they end with a semicolon.
+        //
+        // Recovery: if we parsed a *named* subroutine header and the next token starts
+        // another statement (or closes a surrounding block) instead of a `{`, recover
+        // as a forward declaration with an implied missing semicolon. This preserves
+        // useful structure for IDE workflows (sub node + following statements) instead
+        // of letting parse_block() consume the error and potentially cascade.
         let body = if self.peek_kind() == Some(TokenKind::Semicolon) {
             // Forward declaration — return an empty block as the body
+            let pos = self.current_position();
+            Node::new(
+                NodeKind::Block { statements: vec![] },
+                SourceLocation { start: pos, end: pos },
+            )
+        } else if name.is_some()
+            && self.peek_kind() != Some(TokenKind::LeftBrace)
+            && (matches!(self.peek_kind(), Some(TokenKind::RightBrace))
+                || self.peek_kind().is_some_and(Self::is_keyword_token))
+        {
+            let error_pos = self.current_position();
+            self.errors.push(ParseError::syntax(
+                "Expected '{' or ';' after subroutine declaration",
+                error_pos,
+            ));
             let pos = self.current_position();
             Node::new(
                 NodeKind::Block { statements: vec![] },

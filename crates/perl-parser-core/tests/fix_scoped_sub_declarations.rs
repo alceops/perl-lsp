@@ -21,3 +21,8 @@ fn parses_our_sub_declaration() {
 fn parses_state_sub_declaration() {
     assert_clean_parse("state sub memo { state $x = 1; $x }");
 }
+
+#[test]
+fn parses_scoped_sub_forward_declarations() {
+    assert_clean_parse("my sub helper; our sub exported; state sub memoized;");
+}
