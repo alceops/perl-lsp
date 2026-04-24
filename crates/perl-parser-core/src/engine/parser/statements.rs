@@ -221,7 +221,22 @@ impl<'a> Parser<'a> {
                     let decl_token = self.consume_token()?;
                     let mut sub_node = self.parse_subroutine()?;
                     sub_node.location.start = decl_token.start;
-                    self.finish_subroutine_statement(sub_node)
+                    if let NodeKind::Subroutine { name, .. } = &sub_node.kind
+                        && name.is_none()
+                    {
+                        let error_pos = self.current_position();
+                        let found = self
+                            .peek_kind()
+                            .map_or_else(|| "EOF".to_string(), |kind| kind.display_name().to_string());
+                        self.record_error(ParseError::unexpected(
+                            "subroutine name",
+                            found,
+                            error_pos,
+                        ));
+                        Ok(sub_node)
+                    } else {
+                        self.finish_subroutine_statement(sub_node)
+                    }
                 } else {
                     let decl = self.parse_variable_declaration()?;
                     if self.peek_kind() == Some(TokenKind::FatArrow) {
