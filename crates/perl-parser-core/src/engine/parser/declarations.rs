@@ -1,5 +1,8 @@
 impl<'a> Parser<'a> {
-    fn parse_qualified_name(&mut self, allow_trailing_separator: bool) -> ParseResult<(String, SourceLocation)> {
+    fn parse_qualified_name(
+        &mut self,
+        allow_trailing_separator: bool,
+    ) -> ParseResult<(String, SourceLocation)> {
         // Accept keywords as package names (e.g., `package if;`, `package next;`)
         // Same pattern as parse_subroutine — keywords are valid barewords in Perl
         let first = if self.peek_kind().is_some_and(Self::can_be_sub_name) {
@@ -62,7 +65,8 @@ impl<'a> Parser<'a> {
     /// handler.  Unknown attributes are warned about (pushed to `self.errors`) but do
     /// **not** cause a hard parse failure — custom attribute usage is widespread in
     /// CPAN code (e.g. Moose `:ro`, Catalyst `:Private`).
-    const BUILTIN_SUB_ATTRIBUTES: &'static [&'static str] = &["lvalue", "method", "prototype", "const"];
+    const BUILTIN_SUB_ATTRIBUTES: &'static [&'static str] =
+        &["lvalue", "method", "prototype", "const"];
 
     /// Built-in class-level attributes defined by Perl 5.38+ `use feature 'class'`.
     ///
@@ -203,10 +207,7 @@ impl<'a> Parser<'a> {
                 // sub ::PCDATA or sub ::DB_File::splice
                 let ident_token = self.tokens.next()?;
                 let full_name = format!("::{}", ident_token.text);
-                (
-                    Some(full_name),
-                    Some(SourceLocation { start: name_start, end: ident_token.end }),
-                )
+                (Some(full_name), Some(SourceLocation { start: name_start, end: ident_token.end }))
             } else {
                 // sub :: with no following name — treat as name "::"
                 (
@@ -430,7 +431,24 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'package'
 
-        let (mut name, name_span) = self.parse_qualified_name(true)?;
+        let leading_main_start = if self.peek_kind() == Some(TokenKind::DoubleColon) {
+            let token = self.consume_token()?;
+            Some(token.start)
+        } else if self.peek_kind() == Some(TokenKind::Colon)
+            && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon)
+        {
+            let first = self.consume_token()?;
+            self.consume_token()?;
+            Some(first.start)
+        } else {
+            None
+        };
+
+        let (mut name, mut name_span) = self.parse_qualified_name(true)?;
+        if let Some(prefix_start) = leading_main_start {
+            name.insert_str(0, "::");
+            name_span.start = prefix_start;
+        }
 
         // Check for optional version number or v-string
         let version = if self.peek_kind() == Some(TokenKind::Number) {
@@ -490,55 +508,60 @@ impl<'a> Parser<'a> {
         self.consume_token()?; // consume 'use'
 
         // Parse module name, version, or identifier
-        let mut module = if matches!(
-            self.peek_kind(),
-            Some(TokenKind::Number) | Some(TokenKind::VString)
-        ) {
-            // Numeric version like 5.036 or v-string like v5.14, v5.12.0
-            self.consume_token()?.text.to_string()
-        } else {
-            let first_token = self.consume_token()?;
+        let mut module =
+            if matches!(self.peek_kind(), Some(TokenKind::Number) | Some(TokenKind::VString)) {
+                // Numeric version like 5.036 or v-string like v5.14, v5.12.0
+                self.consume_token()?.text.to_string()
+            } else {
+                let first_token = self.consume_token()?;
 
-            // Check for version strings
-            if first_token.kind == TokenKind::Identifier
-                && first_token.text.starts_with('v')
-                && first_token.text.chars().skip(1).all(|c| c.is_numeric())
-            {
-                // Version identifier like v5 or v536
-                let mut version = first_token.text.to_string();
+                // Check for version strings
+                if first_token.kind == TokenKind::Identifier
+                    && first_token.text.starts_with('v')
+                    && first_token.text.chars().skip(1).all(|c| c.is_numeric())
+                {
+                    // Version identifier like v5 or v536
+                    let mut version = first_token.text.to_string();
 
-                // Check if followed by dot and more numbers (e.g., v5.36)
-                if self.peek_kind() == Some(TokenKind::Unknown) {
-                    if let Ok(dot_token) = self.tokens.peek() {
-                        if dot_token.text.as_ref() == "." {
-                            self.consume_token()?; // consume dot
-                            if self.peek_kind() == Some(TokenKind::Number) {
-                                let num = self.consume_token()?;
-                                version.push('.');
-                                version.push_str(&num.text);
+                    // Check if followed by dot and more numbers (e.g., v5.36)
+                    if self.peek_kind() == Some(TokenKind::Unknown) {
+                        if let Ok(dot_token) = self.tokens.peek() {
+                            if dot_token.text.as_ref() == "." {
+                                self.consume_token()?; // consume dot
+                                if self.peek_kind() == Some(TokenKind::Number) {
+                                    let num = self.consume_token()?;
+                                    version.push('.');
+                                    version.push_str(&num.text);
+                                }
                             }
                         }
                     }
+                    version
+                } else if first_token.text.as_ref() == "v"
+                    && self.peek_kind() == Some(TokenKind::Number)
+                {
+                    // Version string like v5.36 (tokenized as "v" followed by number)
+                    let version = self.expect(TokenKind::Number)?;
+                    format!("v{}", version.text)
+                } else if first_token.kind == TokenKind::Identifier {
+                    first_token.text.to_string()
+                } else if first_token.text.chars().all(|c| c.is_alphanumeric() || c == '_')
+                    && !first_token.text.is_empty()
+                {
+                    // Keyword-named pragmas: `use if COND, MODULE`, `use unless COND, MODULE`, etc.
+                    // The token kind is a keyword (e.g., TokenKind::If) but the text is a valid
+                    // Perl module name (all word chars). Accept it as-is.
+                    first_token.text.to_string()
+                } else {
+                    return Err(ParseError::syntax(
+                        format!(
+                            "Expected module name or version, found {}",
+                            first_token.kind.display_name()
+                        ),
+                        first_token.start,
+                    ));
                 }
-                version
-            } else if first_token.text.as_ref() == "v" && self.peek_kind() == Some(TokenKind::Number) {
-                // Version string like v5.36 (tokenized as "v" followed by number)
-                let version = self.expect(TokenKind::Number)?;
-                format!("v{}", version.text)
-            } else if first_token.kind == TokenKind::Identifier {
-                first_token.text.to_string()
-            } else if first_token.text.chars().all(|c| c.is_alphanumeric() || c == '_') && !first_token.text.is_empty() {
-                // Keyword-named pragmas: `use if COND, MODULE`, `use unless COND, MODULE`, etc.
-                // The token kind is a keyword (e.g., TokenKind::If) but the text is a valid
-                // Perl module name (all word chars). Accept it as-is.
-                first_token.text.to_string()
-            } else {
-                return Err(ParseError::syntax(
-                    format!("Expected module name or version, found {}", first_token.kind.display_name()),
-                    first_token.start,
-                ));
-            }
-        };
+            };
 
         // Handle :: in module names
         // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
@@ -605,11 +628,7 @@ impl<'a> Parser<'a> {
             let end = self.previous_position();
             let has_filter_risk = Self::is_filter_module(&module);
             return Ok(Node::new(
-                NodeKind::Use {
-                    module,
-                    args: cond_args,
-                    has_filter_risk,
-                },
+                NodeKind::Use { module, args: cond_args, has_filter_risk },
                 SourceLocation { start, end },
             ));
         }
@@ -827,11 +846,11 @@ impl<'a> Parser<'a> {
                         match self.peek_kind() {
                             Some(TokenKind::Comma) => {
                                 self.consume_token()?; // consume comma
-                                // Continue to parse next argument
+                                                       // Continue to parse next argument
                             }
                             Some(TokenKind::FatArrow) => {
                                 self.consume_token()?; // consume =>
-                                // Consume the value after =>
+                                                       // Consume the value after =>
                                 self.consume_use_import_value(&mut args)?;
                             }
                             _ => {
@@ -939,11 +958,11 @@ impl<'a> Parser<'a> {
                         match self.peek_kind() {
                             Some(TokenKind::Comma) => {
                                 self.consume_token()?; // consume comma
-                                // Continue to parse next argument
+                                                       // Continue to parse next argument
                             }
                             Some(TokenKind::FatArrow) => {
                                 self.consume_token()?; // consume =>
-                                // Consume the value after =>
+                                                       // Consume the value after =>
                                 self.consume_use_import_value(&mut args)?;
                             }
                             _ => {
@@ -1003,7 +1022,10 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         let has_filter_risk = Self::is_filter_module(&module);
-        Ok(Node::new(NodeKind::Use { module, args, has_filter_risk }, SourceLocation { start, end }))
+        Ok(Node::new(
+            NodeKind::Use { module, args, has_filter_risk },
+            SourceLocation { start, end },
+        ))
     }
 
     /// Parse special block (AUTOLOAD, DESTROY, etc.)
@@ -1220,7 +1242,7 @@ impl<'a> Parser<'a> {
                             }
                             Some(TokenKind::FatArrow) => {
                                 self.consume_token()?; // consume =>
-                                // Best-effort: slurp the value until ',' or ';'
+                                                       // Best-effort: slurp the value until ',' or ';'
                                 while !Self::is_statement_terminator(self.peek_kind())
                                     && self.peek_kind() != Some(TokenKind::Comma)
                                     && !self.tokens.is_eof()
@@ -1247,7 +1269,7 @@ impl<'a> Parser<'a> {
                             }
                             Some(TokenKind::FatArrow) => {
                                 self.consume_token()?; // consume =>
-                                // Best-effort: slurp the value until ',' or ';'
+                                                       // Best-effort: slurp the value until ',' or ';'
                                 while !Self::is_statement_terminator(self.peek_kind())
                                     && self.peek_kind() != Some(TokenKind::Comma)
                                     && !self.tokens.is_eof()
