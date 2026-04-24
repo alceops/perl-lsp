@@ -937,6 +937,38 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
+/// Decision outcome for safe-delete preflight checks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SafeDeleteDecision {
+    /// No external references were found; deletion can proceed.
+    Safe,
+    /// References were found in other files; deletion must be blocked.
+    BlockedExternalReferences,
+}
+
+/// Structured output from safe-delete preflight checks.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct SafeDeletePreflight {
+    /// The symbol key that was checked.
+    pub symbol: SymbolKey,
+    /// Definition location resolved for the symbol, when available.
+    pub definition: Option<Location>,
+    /// References to the symbol in files other than the definition file.
+    pub external_references: Vec<Location>,
+    /// Final safe-delete decision derived from external reference presence.
+    pub decision: SafeDeleteDecision,
+}
+
+impl SafeDeletePreflight {
+    /// Returns true when safe-delete may proceed.
+    #[must_use]
+    pub fn can_delete(&self) -> bool {
+        self.decision == SafeDeleteDecision::Safe
+    }
+}
+
 /// Normalize a Perl variable name for Index/Analyze workflows.
 ///
 /// Extracts an optional sigil and bare name for consistent symbol indexing.
@@ -2687,6 +2719,39 @@ impl WorkspaceIndex {
         });
 
         all_refs
+    }
+
+    /// Run a cross-file safe-delete preflight for a symbol key.
+    ///
+    /// This first implementation is plumbing-focused: it reports whether
+    /// references exist outside the definition file and returns structured
+    /// details for later code-action/UI integration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Normalized symbol key to evaluate for safe-delete.
+    ///
+    /// # Returns
+    ///
+    /// Structured preflight data including external references and decision.
+    #[must_use]
+    pub fn safe_delete_preflight(&self, key: &SymbolKey) -> SafeDeletePreflight {
+        let definition = self.find_def(key);
+        let all_refs = self.find_refs(key);
+
+        let external_references = if let Some(def) = &definition {
+            all_refs.into_iter().filter(|loc| loc.uri != def.uri).collect()
+        } else {
+            all_refs
+        };
+
+        let decision = if external_references.is_empty() {
+            SafeDeleteDecision::Safe
+        } else {
+            SafeDeleteDecision::BlockedExternalReferences
+        };
+
+        SafeDeletePreflight { symbol: key.clone(), definition, external_references, decision }
     }
 }
 
