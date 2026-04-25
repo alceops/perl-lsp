@@ -541,7 +541,7 @@ impl<'a> Parser<'a> {
                     && self.peek_kind() == Some(TokenKind::Number)
                 {
                     // Version string like v5.36 (tokenized as "v" followed by number)
-                    let version = self.expect(TokenKind::Number)?;
+                    let version = self.consume_token()?;
                     format!("v{}", version.text)
                 } else if first_token.kind == TokenKind::Identifier {
                     first_token.text.to_string()
