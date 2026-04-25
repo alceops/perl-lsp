@@ -348,9 +348,16 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if a token kind is a binary operator that couldn't start an expression argument.
+    ///
+    /// Note: `Not` and `WordNot` are unary, not binary, so they are excluded here even though
+    /// `is_logical_operator()` includes them.  Use explicit binary-logical matching instead.
     fn is_binary_operator(kind: TokenKind) -> bool {
-        kind.is_logical_operator()
-            || kind.is_comparison_operator()
+        // Binary logical operators (excludes unary `not` / `!`)
+        matches!(
+            kind,
+            TokenKind::Or | TokenKind::And | TokenKind::DefinedOr
+                | TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor
+        ) || kind.is_comparison_operator()
             || kind.is_assignment_operator()
             || matches!(
                 kind,
