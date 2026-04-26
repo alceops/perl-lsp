@@ -4,7 +4,7 @@
 //! Perl, maintained alongside the native v3 Rust parser ([`perl-parser`]) for
 //! compatibility testing and comparison. It vendors a snapshot of the upstream
 //! [tree-sitter-perl] C grammar (`parser.c` + `scanner.c`) under `c-src/` and
-//! exposes it via a hand-written FFI declaration — no `bindgen` or `libclang`
+//! exposes it via a hand-written FFI declaration � no `bindgen` or `libclang`
 //! dependency is required to build.
 //!
 //! ## Relation to `tree-sitter-perl-rs`
@@ -13,11 +13,11 @@
 //! is the recommended choice for new Rust projects. This crate (`tree-sitter-perl-c`)
 //! should be preferred when:
 //!
-//! - **Compatibility testing** — comparing parse output against the upstream
+//! - **Compatibility testing** � comparing parse output against the upstream
 //!   C reference grammar.
-//! - **Non-Rust tree-sitter tooling** — the C grammar snapshot can be used as
+//! - **Non-Rust tree-sitter tooling** � the C grammar snapshot can be used as
 //!   a build dependency for language bindings in other languages.
-//! - **Baseline benchmarking** — measuring parse throughput of the C grammar
+//! - **Baseline benchmarking** � measuring parse throughput of the C grammar
 //!   against the native v3 parser.
 //!
 //! ## Build requirements
@@ -80,7 +80,7 @@ pub fn language() -> Language {
 /// Returns an error if the language version is incompatible with the linked
 /// tree-sitter runtime (this should not happen in practice).
 ///
-/// Prefer this over [`create_parser`] in new code — it surfaces errors
+/// Prefer this over [`create_parser`] in new code � it surfaces errors
 /// explicitly.
 ///
 /// # Example
@@ -303,10 +303,10 @@ mod tests {
     #[test]
     fn test_reusable_parser_error_state_does_not_bleed() -> Result<(), Box<dyn std::error::Error>> {
         let mut parser = PerlParser::new()?;
-        // First parse: syntactically invalid Perl — tree must exist but have error nodes.
+        // First parse: syntactically invalid Perl � tree must exist but have error nodes.
         let bad_tree = parser.parse_code("my $x = @@@@@@;")?;
         assert!(bad_tree.root_node().has_error(), "invalid Perl should produce error nodes");
-        // Second parse: valid Perl — must produce a clean tree despite the previous error.
+        // Second parse: valid Perl � must produce a clean tree despite the previous error.
         let good_tree = parser.parse_code("my $y = 42;")?;
         assert!(!good_tree.root_node().has_error(), "valid Perl after error parse must be clean");
         Ok(())
@@ -365,12 +365,26 @@ mod tests {
     }
 
     /// Verify that BOM-stripping helper removes UTF-8 BOM and yields a clean tree.
+    ///
+    /// Also verify that the same source without a BOM parses cleanly (control case),
+    /// confirming that any error in the BOM variant of the unstripped parse is due to
+    /// the BOM bytes, not the source content.
     #[test]
     fn test_parse_bytes_stripping_utf8_bom_removes_error_node()
     -> Result<(), Box<dyn std::error::Error>> {
         let bom_source = b"\xEF\xBB\xBFmy $x = 1;";
-        let tree = parse_perl_bytes_stripping_utf8_bom(bom_source)?;
-        assert!(!tree.root_node().has_error());
+        let no_bom_source = b"my $x = 1;";
+
+        // Control: source without BOM parses cleanly.
+        let clean_tree = parse_perl_bytes(no_bom_source)?;
+        assert!(!clean_tree.root_node().has_error(), "source without BOM must parse cleanly");
+
+        // After stripping, BOM-prefixed source must also parse cleanly.
+        let stripped_tree = parse_perl_bytes_stripping_utf8_bom(bom_source)?;
+        assert!(
+            !stripped_tree.root_node().has_error(),
+            "BOM-stripped source must parse cleanly"
+        );
         Ok(())
     }
 
@@ -384,9 +398,10 @@ mod tests {
 }
 
 // SAFETY: See the SAFETY comment on the `language()` function above.
-// This is the only unsafe code in the crate — the single FFI symbol we need
+// This is the only unsafe code in the crate � the single FFI symbol we need
 // from the compiled C grammar. No bindgen is used; the declaration is
 // hand-written to avoid a libclang build dependency.
 unsafe extern "C" {
     fn tree_sitter_perl() -> Language;
 }
+
