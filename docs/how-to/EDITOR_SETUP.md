@@ -30,8 +30,8 @@ perllsp --health
 | coc.nvim | configure `languageserver.perl-lsp` in `coc-settings.json` to launch `perllsp --stdio`; works in Neovim and Vim when the buffer filetype is `perl` | [docs/EDITORS/COC_NEOVIM_SETUP.md](../EDITORS/COC_NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
-| Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
-| Sublime Text | install Sublime's `LSP` package and add a custom `perl-lsp` server in `LanguageServers.sublime-settings` using `perllsp --stdio` | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Zed | requires a Zed Perl extension that registers `perllsp`; `settings.json` can override binary and initialization options for that registered server | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
+| Sublime Text | register `perllsp` in LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | configure an MCP bridge such as `lsp-mcp`; the bridge exposes tools to Codex and launches `perllsp --stdio` internally | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
@@ -142,8 +142,11 @@ args = ["--stdio"]
 
 ### Zed
 
-Zed requires a Perl extension that registers `perllsp`. Once installed, you
-can override the binary path via `settings.json`:
+Zed does not create arbitrary language servers from `settings.json` alone. A
+Zed language extension must first register a Perl language server ID, for
+example `perl-lsp`.
+
+Once that extension exists, configure the server in Zed settings:
 
 ```json
 {
@@ -158,18 +161,16 @@ can override the binary path via `settings.json`:
 }
 ```
 
+The public Zed Perl extension currently registers `perlnavigator-server`, not
+`perllsp`, so use a perllsp-capable extension or development extension before
+applying the `perl-lsp` settings.
+
 See [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) for full setup details.
 
 
 ### Sublime Text
 
-<<<<<<< HEAD
-Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
-`source.perl | text.perl`, and set `syntaxes` to Perl/Pod syntax files so `.pm`,
-`.pl`, `.t`, and Pod buffers consistently attach to the server.
-=======
-Install the `LSP` package, then open `Preferences: LSP Server Configurations`
-and add:
+Install the `LSP` package, then open `Preferences: LSP Server Configurations` and add:
 
 ```json
 {
@@ -181,9 +182,7 @@ and add:
 }
 ```
 
-For project-specific server settings, use `.perl-lsp.toml` or add Sublime
-`initialization_options` under the `perl-lsp` server configuration.
->>>>>>> e3c70ae4e (docs(sublime): modernize setup and config guidance (#0000))
+For project-specific server settings, use `.perl-lsp.toml` or add Sublime `initialization_options` under the `perl-lsp` server configuration.
 
 ### Amazon Kiro
 
