@@ -500,7 +500,7 @@ pub fn run(config: GateRunnerConfig) -> Result<()> {
 
     // Load gate policy
     let policy_path = root.join(".ci/gate-policy.yaml");
-    let policy = load_policy(&policy_path)?;
+    let policy = load_policy_for_inspection(&policy_path)?;
 
     // Filter gates based on tier and gate filter
     let gates_to_run = filter_gates(&policy, &config)?;
@@ -542,7 +542,7 @@ pub fn run(config: GateRunnerConfig) -> Result<()> {
 }
 
 /// Load gate policy from YAML file
-fn load_policy(path: &PathBuf) -> Result<GatePolicy> {
+pub(crate) fn load_policy_for_inspection(path: &Path) -> Result<GatePolicy> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read gate policy from {}", path.display()))?;
     let policy: GatePolicy = serde_yaml_ng::from_str(&content)

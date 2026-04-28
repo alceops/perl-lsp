@@ -164,6 +164,9 @@ merge, and every subsequent PR compares regression-to-regression. This is the
 
 All gate definitions live in `.ci/gate-policy.yaml`. The schema version is 1. The
 `xtask/src/tasks/gates.rs` runner reads this policy and executes gates, emitting receipts.
+`.ci/GATE_REGISTRY.toml` is a legacy metadata index and is **not** used to decide
+merge blocking behavior. Use `cargo xtask gate-policy check` to verify policy/registry
+alignment and PR-safety invariants (including CPAN non-blocking on PR profile).
 
 ### Tier Mapping
 
