@@ -4417,10 +4417,7 @@ sub run {
             &ast,
             code,
             Some(index),
-            vec![
-                PathBuf::from("/usr/local/lib/perl5"),
-                PathBuf::from("t/lib"),
-            ],
+            vec![PathBuf::from("/usr/local/lib/perl5"), PathBuf::from("t/lib")],
             vec![PathBuf::from("/usr/lib/perl5/5.38")],
             false,
         )
