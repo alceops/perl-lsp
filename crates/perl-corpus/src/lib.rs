@@ -230,6 +230,7 @@ pub mod gold;
 pub mod index;
 pub mod lint;
 pub mod meta;
+pub mod sidecar;
 pub mod tie_interface;
 
 use anyhow::{Context, Result};
@@ -265,6 +266,11 @@ pub use gold::{
 };
 use meta::Section;
 use regex::Regex;
+pub use sidecar::{
+    ConceptRegistry, ExpectationMode, FixtureExpectationSidecar, SidecarConcept, SidecarExpect,
+    SidecarMetrics, SidecarSnapshots, SidecarValidation, discover_sidecars, expected_fixture_path,
+    load_and_validate_sidecar, parse_sidecar, validate_sidecar,
+};
 use std::collections::HashMap;
 use std::{fs, path::Path};
 pub use tie_interface::{
