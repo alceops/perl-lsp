@@ -860,6 +860,12 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Emit parser-ratchet scaffold receipts.
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1377,6 +1383,32 @@ enum CpanCorpusCommand {
         /// Local install directory containing CPAN modules
         #[arg(long)]
         install_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Produce an initial parser-ratchet scaffold receipt.
+    Run {
+        /// Ratchet execution profile.
+        #[arg(long, value_enum)]
+        profile: parser_ratchet::RatchetProfile,
+
+        /// Explicit git revision for the base side.
+        #[arg(long)]
+        base: String,
+
+        /// Explicit git revision for the head side.
+        #[arg(long)]
+        head: String,
+
+        /// Output path for the receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Force selection in scaffold mode.
+        #[arg(long)]
+        force_selected: bool,
     },
 }
 
@@ -1929,6 +1961,17 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::ParserRatchet { command } => match command {
+            ParserRatchetCommand::Run { profile, base, head, receipt, force_selected } => {
+                parser_ratchet::run(parser_ratchet::ParserRatchetRunConfig {
+                    profile,
+                    base,
+                    head,
+                    receipt,
+                    force_selected,
+                })
+            }
+        },
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
             match command {
